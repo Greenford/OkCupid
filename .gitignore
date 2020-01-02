@@ -1,0 +1,5 @@
+__pycache__/
+.ipynb_checkpoints
+live_images/
+chromedriver
+okc_account_credentials
