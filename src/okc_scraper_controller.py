@@ -385,7 +385,7 @@ class Scraper:
     def save_images(self, save_dir, username):
     #TODO docstring
         if not os.path.exists(save_dir):
-            os.mkdir(img_save_dir)
+            os.mkdir(save_dir)
         images = self.driver.find_element_by_class_name('profile-thumb')\
             .find_elements_by_tag_name('img')
         images.extend(self.driver.find_element_by_class_name('profile-essays')\
