@@ -56,6 +56,7 @@ class Scraper:
 
         self.driver.find_element_by_class_name('accept-cookies-button')\
             .click()
+        time.sleep(1)
 
         try:
             self.driver.find_element_by_class_name('login-username')\
