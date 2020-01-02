@@ -85,15 +85,15 @@ class Scraper:
         self.driver.get('https://www.okcupid.com/logout')
 
 
-    def setFirstVersion(self, scraper_collection):
+    def set_first_version(self, question_data):
     #TODO docstring
-        qd = self.getScraperQuestionData()
+        #qd = self.getScraperQuestionData()
         dt_now = datetime.now().strftime('%Y%m%d_%H%M%S')
-        scraper_collection.insert_one({                                 \
-             '_id': self.name,                                          \
-             'current_version': dt_now,                                 \
-             'versions':{                                               \
-                dt_now: qd                                              \
+        db.scrapers.insert_one({         \
+             '_id': self.name,           \
+             'current_version': dt_now,  \
+             'versions':{                \
+                dt_now: qd               \
         }})
         self.version = dt_now
 
@@ -177,22 +177,20 @@ class Scraper:
             {'versions': versions, 'current_version': dt_now}})
         self.version = dt_now
 
+    #TODO skeleton method - complete
     def _merge_question_data_versions(prev_qd, new_qd):
-    #TODO docstring
-    '''
-    Returns a complete question data list composed of the union of the
-    two lists, except old versions of the same questions are replaced with new
-    versions.
-    '''
-        #TODO currently a skeleton method - complete
-
+        '''
+        Returns a complete question data list composed of the union of the
+        two lists, except old versions of the same questions are replaced with new
+        versions.
+        '''
         return new_qd
 
     def _is_same_question(q1, q2):
     #TODO docstring
-    '''
-    Compares two questions by the question text. Used in _merge----
-    '''
+        '''
+        Compares two questions by the question text. Used in _merge----
+        '''
         #TODO currently a skeleton method - complete
         return False
         
@@ -217,63 +215,86 @@ class Scraper:
 
         
     def scrape_user(self, img_save_dir, username, wait):
-    #TODO docstring        
+        #TODO docstring        
         #TODO need try-accept block for when user isn't found
+
         #scrape questions first
         driver.get(f'https://www.okcupid.com/profile/{username}/questions')
         time.sleep(wait)
 
         #if there are any unanswered questions, answer them so we can scrape
-        #ALL the users answered questions later.
+        #ALL the user's answered questions later.
         if self.get_num_questions_by_filter('FIND OUT') > 0:
-            self.answer_unanswered_questions()
-            self.addVersion()
+            qdata = self.answer_unanswered_questions()
+            self.add_questions_update_version(qdata)
+
+        #scrape the questions the user has answered
         questions = self.scrape_user_questions(username)
 
         #scrape their main profile contents
         self.driver.get(f'https://www.okcupid.com/profile/{username}')
-        time.sleep(1+np.random.exponential())
+        time.sleep(wait*np.random.exponential())
         try:
             self.driver.find_element_by_class_name('profile-essays-expander').click()
-        #short profiles. bah!
-        except NoSuchElementException:
+        except NoSuchElementException: #short profiles
             pass
         html = self.driver.find_element_by_tag_name('HTML').get_attribute('innerHTML')
         
         #scrape images
         img_count = self.save_images(img_save_dir, username)
         
+        dtime = datetime.now().strftime('%Y%m%d_%H%M%S'),
+        
         #package it all up
-        ret_dict = dict()
-        ret_dict['_id'] = username
-        ret_dict['html'] = html
-        ret_dict['img_count'] = img_count
-        ret_dict['agree_q'] = questions[0]
-        ret_dict['disagree_q'] = questions[1]
-        ret_dict['metadata'] = dict()
-        ret_dict['metadata']['time'] = datetime.now().strftime('%Y%m%d_%H%M%S')
-        ret_dict['metadata']['scraper'] = self.name
-        ret_dict['metadata']['scraper_version'] = self.version
-        return ret_dict
+        return{                                 \
+            '_id': username,                    \
+            'html': html,                       \
+            'img_count': img_count,             \
+            'questions': questions,             \
+            'metadata':{                        \
+                'time': dtime,                  \
+                'scraper': self.name,           \
+                'scraper_version': self.version \
+            }                                   \
+        }
 
 
     def answer_question_overlay(self, importance_answer=1):
     #TODO docstring
-        answer = int(np.random.uniform() * len(your_answer_buttons))
-        self.driver.find_element_by_class_name('pickonebutton-buttons')\
-            .find_elements_by_tag_name('button')[answer]\
-            .click()
-        self.driver.find_element_by_class_name('pickmanybuttons-buttons')\
-            .find_elements_by_tag_name('button')[answer]\
-            .click()
-        self.driver.find_element_by_class_name('importance-pickonebutton-buttons')\
-            .find_elements_by_tag_name('button')[importance_answer]\
-            .click()
-        qdatum = driver.find_element_by_class_name('questionspage')\
-            .get_attribute('innerHTML')
+        overlay = self.driver.find_element_by_class_name('questionspage')
+
+        #get button arrays
+        our_answer_buttons = overlay.find_element_by_class_name('pickonebutton-buttons')\
+            .find_elements_by_class_name('pickonebutton-button')
+        their_answer_buttons = overlay.find_element_by_class_name('pickmanybuttons')\
+            .find_elements_by_tag_name('input')
+        importance_buttons = overlay.find_element_by_class_name('importance-pickonebutton')\
+            .find_elements_by_tag_name('button')
+
+        #get data to store
+        text = overlay.find_element_by_tag_name('h1').text
+        choices = [b.text for b in our_answer_buttons]
+        answer = int(np.random.uniform() * len(choices))
+        acceptable_arr = [False]*len(choices)
+        acceptable_arr[answer] = True
+
+        #click the appropriate buttons
+        our_answer_buttons[answer].click()
+        their_answer_buttons[answer].click()
+        importance_buttons[importance_answer].click()
+        
+        #submit form
         self.driver.find_element_by_class_name('questionspage-buttons-button--answer')\
             .click()
-        return qdatum
+
+        return{                           \
+            'q_text': text,               \
+            'choices': choices,           \
+            'our_answer': answer,         \
+            'acceptable': acceptable_arr, \
+            'importance': importance      \
+        }
+
 
         
     def answer_unanswered_questions(self, wait=1, importance_answer=1):
@@ -284,16 +305,19 @@ class Scraper:
                 self.driver.find_element_by_class_name('profile-questions-filter-icon--findOut')\
                     .click()
                 time.sleep(wait)
+                
                 self.driver.find_element_by_class_name('profile-question')\
                     .click()
                 time.sleep(wait)
-                qdatum = self.answer_question_overlay(importance_answer)
-                qdata.append(qdatum)
+                
+                qdata.append(self.answer_question_overlay(importance_answer))
                 time.sleep(wait)
+
             except NoSuchElementException:
                 wait += 0.1
                 time.sleep(wait)
                 continue
+
         return qdata
                 
                 
@@ -338,7 +362,7 @@ class Scraper:
 
         questions = self.driver.find_elements_by_class_name('profile-question')
         while len(questions) != numQsToScrape:
-            wait += 0.2
+            wait += 0.1
             self.scroll_to_bottom(wait)
             questions = self.driver.find_elements_by_class_name('profile-question')
         return [q.get_attribute('innerHTML') for q in questions]
@@ -454,3 +478,12 @@ class Scraper:
         return tuple(map(int, scraper.driver\
             .find_element_by_class_name('obqconvo-progress-text')\
             .text.split(' of ')))
+
+
+
+if __name__ == "__main__":
+    ren = Scraper('ren')
+    ren.login()
+    ren.set_first_version([])
+
+    s = ren.collect_usernames()
