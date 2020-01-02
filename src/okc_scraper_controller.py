@@ -21,7 +21,7 @@ class Scraper:
         version (str): date string of the datetime when current version was completed.
     """
 
-    def __init__(self, name, driverpath='/home/lapis/Documents/DSI/projects/okc/src/chromedriver'):
+    def __init__(self, name, driverpath=f'{os.getcwd()}/src/chromedriver'):
         """
         Constructor for the Scraper class
 
@@ -89,11 +89,11 @@ class Scraper:
     #TODO docstring
         #qd = self.getScraperQuestionData()
         dt_now = datetime.now().strftime('%Y%m%d_%H%M%S')
-        db.scrapers.insert_one({         \
+        self.db.scrapers.insert_one({    \
              '_id': self.name,           \
              'current_version': dt_now,  \
              'versions':{                \
-                dt_now: qd               \
+                dt_now: question_data    \
         }})
         self.version = dt_now
 
@@ -194,32 +194,34 @@ class Scraper:
         #TODO currently a skeleton method - complete
         return False
         
-    def collect_usernames(self):
+    def collect_usernames(self, softlimit=np.inf):
     #TODO docstring
         self.driver.get('https://www.okcupid.com/match')
         time.sleep(2)
-        s = set()
-        while True:
+        usernames = set()
+        while len(usernames) < softlimit:
             try:
                 self.driver.find_element_by_class_name('blank-state-wrapper')
-                return s
+                return usernames
 
             except NoSuchElementException:
                 try:
                     matchcards = self.driver.find_elements_by_class_name('usercard-thumb')
                     last = matchcards[-1]
-                    s = s.union(set(map(lambda card: card.get_attribute('data-username'), matchcards)))
+                    usernames = usernames.union(set(map(\
+                        lambda card: card.get_attribute('data-username'), matchcards)))
                     last.location_once_scrolled_into_view
                 except StaleElementReferenceException:
                     time.sleep(0.5+np.random.exponential())
+        return usernames
 
         
-    def scrape_user(self, img_save_dir, username, wait):
+    def scrape_user(self, img_save_dir, username, wait=1.5):
         #TODO docstring        
         #TODO need try-accept block for when user isn't found
 
         #scrape questions first
-        driver.get(f'https://www.okcupid.com/profile/{username}/questions')
+        self.driver.get(f'https://www.okcupid.com/profile/{username}/questions')
         time.sleep(wait)
 
         #if there are any unanswered questions, answer them so we can scrape
@@ -378,7 +380,7 @@ class Scraper:
 
     def save_images(self, save_dir, username):
     #TODO docstring
-        if not os.path.exists(img_save_dir):
+        if not os.path.exists(save_dir):
             os.mkdir(img_save_dir)
         images = self.driver.find_element_by_class_name('profile-thumb')\
             .find_elements_by_tag_name('img')
@@ -478,12 +480,32 @@ class Scraper:
         return tuple(map(int, scraper.driver\
             .find_element_by_class_name('obqconvo-progress-text')\
             .text.split(' of ')))
-
+    
+    def save_usernames_to_mongo(self, usernames):
+        self.db.usernames.insert_many(map(lambda u: {'_id':u}, usernames))
 
 
 if __name__ == "__main__":
     ren = Scraper('ren')
     ren.login()
-    ren.set_first_version([])
+    
+    
+    usernames = ren.collect_usernames(softlimit=20)
+    #[u['_id'] for u in ren.db.usernames.find({'_id':{'$exists':'true'}}, {'_id':'true'})]
 
-    s = ren.collect_usernames()
+    for username in usernames:
+        udata = ren.scrape_user('live_images', username)
+        ren.db.users.insert_one(udata)
+
+
+
+
+
+
+
+
+
+
+
+
+
