@@ -7,6 +7,7 @@ import numpy as np
 import time, os, requests
 from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException, StaleElementReferenceException
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.options import Options
 
 class Scraper:
     """
@@ -30,7 +31,9 @@ class Scraper:
             driverpath (str): path to the web driver file
         """
         self.name = name
-        self.driver = Chrome(driverpath)
+        opt = Options()
+        opt.headless = True
+        self.driver = Chrome(executable_path=driverpath, options=opt)
         self.db = MongoClient('localhost', 27017).okc
 
         #get email and password from file
