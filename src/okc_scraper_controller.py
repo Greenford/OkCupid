@@ -424,45 +424,35 @@ class Scraper:
         time.sleep(2*wait+np.random.exponential())
 
         qdata=[]
+        self.driver.find_element_by_class_name('profile-questions-next-actions-button--answer')\
+            .click()
+
         while True:
             try:
-                self.driver.find_element_by_class_name('profile-questions-next-actions-button--answer')\
-                    .click()
                 time.sleep(wait)
-
                 qdatum = self.answer_question_overlay(importance_answer)
-                '''time.sleep(0.75)
-                your_answer_buttons = self.driver.find_element_by_class_name('pickonebutton-buttons')\
-                    .find_elements_by_tag_name('button')
-                acceptable_answers = self.driver.find_element_by_class_name('pickmanybuttons-buttons')\
-                    .find_elements_by_tag_name('button')
-                importance_buttons = self.driver.find_element_by_class_name(\
-                        'importance-pickonebutton-buttons')\
-                    .find_elements_by_tag_name('button')
-                answer = int(np.random.uniform()*len(your_answer_buttons))
-                your_answer_buttons[answer].click()
-                acceptable_answers[answer].click()
-                importance_buttons[importance_answer].click()
-                time.sleep(0.5)
-
-                qdata.append(self.driver.find_element_by_class_name('questionspage')\
-                    .get_attribute('innerHTML'))'''
                 qdata.append(qdatum)
-            except ElementClickInterceptedException:
-                wait += 0.1
-                time.sleep(wait)
-                continue
+            except NoSuchElementException:
+                try:
+                    self.driver.find_element_by_id('no-questions-blank-state')
+                    exit_stat = 0
+                    break
+                except NoSuchElementException:
+                    wait += 0.1
+                    time.sleep(wait)
+                    continue
             except Exception as e:
                 print(e)
+                exit_stat = 1
                 break
-        return qdata
+        return (qdata, exit_stat)
 
 
-    def answer_initial_question(scraper, wait=1):
+    def answer_initial_question(self, wait=1):
     #TODO docstring
-        qtext = scraper.driver.find_element_by_class_name('convoanswers-text')\
+        qtext = self.driver.find_element_by_class_name('convoanswers-text')\
             .text
-        choicebuttons = scraper.driver\
+        choicebuttons = self.driver\
             .find_element_by_class_name('convoanswers-answers')\
             .find_elements_by_tag_name('button')
         choicestext = [b.text for b in choicebuttons]
@@ -470,13 +460,13 @@ class Scraper:
         choicebuttons[answer].click()
         time.sleep(wait)
 
-        choicebuttons = scraper.driver\
+        choicebuttons = self.driver\
             .find_element_by_class_name('convoanswers--theirs')\
             .find_elements_by_tag_name('button')
         choicebuttons[answer].click()
         time.sleep(wait)
 
-        scraper.driver.find_element_by_class_name('convoquestion-continue')\
+        self.driver.find_element_by_class_name('convoquestion-continue')\
             .click()
         return {                    \
             'q_text': qtext,        \
@@ -488,19 +478,19 @@ class Scraper:
         #TODO verify the assumed importance answer is right
 
 
-    def answer_all_initial_questions(scraper, wait=1):
+    def answer_all_initial_questions(self, wait=1):
     #TODO docstring
         qdata = []
-        current_q, num_qs = get_progress(scraper)
+        current_q, num_qs = self.get_progress()
         for i in range(num_qs - current_q+1):
-            qdata.append(answer_initial_question(scraper, wait))
+            qdata.append(self.answer_initial_question(wait))
             time.sleep(wait*2)
         return qdata
 
 
-    def get_progress(scraper):
+    def get_progress(self):
     #TODO docstring
-        return tuple(map(int, scraper.driver\
+        return tuple(map(int, self.driver\
             .find_element_by_class_name('obqconvo-progress-text')\
             .text.split(' of ')))
     
