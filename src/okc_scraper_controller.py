@@ -452,6 +452,9 @@ class Scraper:
                 wait += 0.1
                 time.sleep(wait)
                 continue
+            except Exception as e:
+                print(e)
+                break
         return qdata
 
 
