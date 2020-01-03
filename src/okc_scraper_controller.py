@@ -1,13 +1,15 @@
 from selenium.webdriver import Chrome
+from selenium.common.exceptions import ElementClickInterceptedException,\
+     NoSuchElementException, StaleElementReferenceException
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.options import Options
 from pymongo import MongoClient
 from datetime import datetime
 from urllib.parse import urlparse
+from bs4 import BeautifulSoup
 import pandas as pd
 import numpy as np
 import time, os, requests
-from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException, StaleElementReferenceException
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.options import Options
 
 class Scraper:
     """
@@ -22,7 +24,7 @@ class Scraper:
         version (str): date string of the datetime when current version was completed.
     """
 
-    def __init__(self, name, driverpath=f'{os.getcwd()}/src/chromedriver'):
+    def __init__(self, name, headless = True, driverpath=f'{os.getcwd()}/src/chromedriver'):
         """
         Constructor for the Scraper class
 
@@ -32,7 +34,7 @@ class Scraper:
         """
         self.name = name
         opt = Options()
-        opt.headless = True
+        opt.headless = headless
         self.driver = Chrome(executable_path=driverpath, options=opt)
         self.db = MongoClient('localhost', 27017).okc
 
@@ -87,6 +89,7 @@ class Scraper:
         Logs the current scraper out.
         """
         self.driver.get('https://www.okcupid.com/logout')
+        self.driver.close()
 
 
     def set_first_version(self, question_data):
@@ -101,7 +104,36 @@ class Scraper:
         }})
         self.version = dt_now
 
-    def getScraperQuestionData(self):
+
+    def add_questions_update_version(self, new_question_data):
+    #TODO docstring
+        dt_now = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+        versions = self.db.scrapers.find_one({'_id':self.name})['versions']
+        prev_version = versions[self.version]
+        versions[dt_now] = Scraper._merge_question_data_versions(prev_version, new_question_data)
+        self.db.scrapers.update({'_id':self.name}, {'$set':
+            {'versions': versions, 'current_version': dt_now}})
+        self.version = dt_now
+
+    def _merge_question_data_versions(prev_qd, new_qd):
+        '''
+        Returns a complete question-data-list that is the union of the
+        two lists, where old versions of the same questions are replaced with new
+        versions.
+        '''
+        ret_dict = {text:question for text, question in map(
+            lambda q: (q['q_text'], q), new_qd)}
+
+        for question in prev_qd:
+            text = question['q_text']
+            if ret_dict.get(text) == None:
+                ret_dict[text] == question
+
+        return list(ret_dict.values())
+
+
+    def get_scraper_question_data(self):
     #TODO docstring
         self.driver.get('https://www.okcupid.com/profile')
         time.sleep(2+np.random.exponential())
@@ -117,17 +149,18 @@ class Scraper:
 
         while not sameq(current, questions[-1]):
             for j in range(i,len(questions)):
+
                 #open question detail overlay
                 questions[j].click()
                 #needs a moment to load
                 time.sleep(0.3+0.2*np.random.exponential())
-                
+
                 #scrape question overlay. 
                 overlay = self.driver.find_element_by_class_name('questionspage')
 
                 #get question text
                 text = overlay.find_element_by_tag_name('h1').text
-                
+
                 #get the choices and what our answer was
                 our_answer_buttons = overlay.find_element_by_class_name('pickonebutton-buttons')\
                     .find_elements_by_class_name('pickonebutton-button')
@@ -139,7 +172,7 @@ class Scraper:
                 their_answer_buttons = overlay.find_element_by_class_name('pickmanybuttons')\
                     .find_elements_by_tag_name('input')
                 acceptable = list(map(lambda x: x.get_property('checked'), their_answer_buttons))
-                
+
                 #get how important the question is to our scraper
                 #should all be 1:somewhat important
                 importance_buttons = overlay.find_element_by_class_name('importance-pickonebutton')\
@@ -158,45 +191,18 @@ class Scraper:
 
                 #exit overlay
                 self.driver.find_element_by_class_name('reactmodal-header-close').click()
-                
+
             #adjust loop conditions
             current = questions[j]
             current.location_once_scrolled_into_view
             questions = self.driver.find_elements_by_class_name('profile-question')
             for i in range(len(questions)):
                 if sameq(current, questions[i]):
-                    break 
+                    break
 
         return datalist
 
 
-    def add_questions_update_version(self, new_question_data):
-    #TODO docstring
-        dt_now = datetime.now().strftime('%Y%m%d_%H%M%S')
-
-        versions = self.db.scrapers.find_one({'_id':self.name})['versions']
-        prev_version = versions[self.version]
-        versions[dt_now] = _merge_question_data_versions(prev_version, new_question_data)
-        self.db.scrapers.update({'_id':self.name}, {'$set':
-            {'versions': versions, 'current_version': dt_now}})
-        self.version = dt_now
-
-    #TODO skeleton method - complete
-    def _merge_question_data_versions(prev_qd, new_qd):
-        '''
-        Returns a complete question data list composed of the union of the
-        two lists, except old versions of the same questions are replaced with new
-        versions.
-        '''
-        return new_qd
-
-    def _is_same_question(q1, q2):
-    #TODO docstring
-        '''
-        Compares two questions by the question text. Used in _merge----
-        '''
-        #TODO currently a skeleton method - complete
-        return False
         
     def collect_usernames(self, softlimit=np.inf):
     #TODO docstring
@@ -206,9 +212,16 @@ class Scraper:
         while len(usernames) < softlimit:
             try:
                 self.driver.find_element_by_class_name('blank-state-wrapper')
-                return usernames
+                exit_stat = 1
+                break
 
             except NoSuchElementException:
+                try:
+                    self.driver.find_element_by_class_name('match-results-error')
+                    exit_stat = 0
+                    break
+                except NoSuchElementException:
+                    pass
                 try:
                     matchcards = self.driver.find_elements_by_class_name('usercard-thumb')
                     last = matchcards[-1]
@@ -217,7 +230,7 @@ class Scraper:
                     last.location_once_scrolled_into_view
                 except StaleElementReferenceException:
                     time.sleep(0.5+np.random.exponential())
-        return usernames
+        return (usernames, exit_stat)
 
         
     def scrape_user(self, img_save_dir, username, wait=1.5):
@@ -265,7 +278,7 @@ class Scraper:
         }
 
 
-    def answer_question_overlay(self, importance_answer=1):
+    def answer_question_overlay(self, importance_answer=1, wait=0.1):
     #TODO docstring
         overlay = self.driver.find_element_by_class_name('questionspage')
 
@@ -286,8 +299,11 @@ class Scraper:
 
         #click the appropriate buttons
         our_answer_buttons[answer].click()
+        time.sleep(wait)
         their_answer_buttons[answer].click()
+        time.sleep(wait)
         importance_buttons[importance_answer].click()
+        time.sleep(wait)
         
         #submit form
         self.driver.find_element_by_class_name('questionspage-buttons-button--answer')\
@@ -399,23 +415,23 @@ class Scraper:
         return len(images)
 
 
-    def answerAllQuestions(self, importance_answer=1):
+    def answer_all_questions(self, importance_answer=1, wait=1):
     #TODO docstring
         self.driver.get('https://www.okcupid.com/profile')
-        time.sleep(2+np.random.exponential())
+        time.sleep(2*wait+np.random.exponential())
         self.driver.find_element_by_class_name('profile-selfview-questions-more')\
             .click()
-        time.sleep(2+np.random.exponential())
-
-        self.driver.find_element_by_class_name('profile-questions-next-actions-button--answer')\
-            .click()
-        time.sleep(1)
+        time.sleep(2*wait+np.random.exponential())
 
         qdata=[]
-
         while True:
             try:
-                time.sleep(0.75)
+                self.driver.find_element_by_class_name('profile-questions-next-actions-button--answer')\
+                    .click()
+                time.sleep(wait)
+
+                qdatum = self.answer_question_overlay(importance_answer)
+                '''time.sleep(0.75)
                 your_answer_buttons = self.driver.find_element_by_class_name('pickonebutton-buttons')\
                     .find_elements_by_tag_name('button')
                 acceptable_answers = self.driver.find_element_by_class_name('pickmanybuttons-buttons')\
@@ -430,11 +446,11 @@ class Scraper:
                 time.sleep(0.5)
 
                 qdata.append(self.driver.find_element_by_class_name('questionspage')\
-                    .get_attribute('innerHTML'))
-
-                driver.find_element_by_class_name('questionspage-buttons-button--answer')\
-                    .click()
+                    .get_attribute('innerHTML'))'''
+                qdata.append(qdatum)
             except ElementClickInterceptedException:
+                wait += 0.1
+                time.sleep(wait)
                 continue
         return qdata
 
