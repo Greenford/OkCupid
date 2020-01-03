@@ -309,12 +309,12 @@ class Scraper:
         self.driver.find_element_by_class_name('questionspage-buttons-button--answer')\
             .click()
 
-        return{                           \
-            'q_text': text,               \
-            'choices': choices,           \
-            'our_answer': answer,         \
-            'acceptable': acceptable_arr, \
-            'importance': importance      \
+        return{                             \
+            'q_text': text,                 \
+            'choices': choices,             \
+            'our_answer': answer,           \
+            'acceptable': acceptable_arr,   \
+            'importance': importance_answer \
         }
 
 
