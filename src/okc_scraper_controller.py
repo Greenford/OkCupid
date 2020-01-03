@@ -286,7 +286,7 @@ class Scraper:
         our_answer_buttons = overlay.find_element_by_class_name('pickonebutton-buttons')\
             .find_elements_by_class_name('pickonebutton-button')
         their_answer_buttons = overlay.find_element_by_class_name('pickmanybuttons')\
-            .find_elements_by_tag_name('input')
+            .find_elements_by_tag_name('button')
         importance_buttons = overlay.find_element_by_class_name('importance-pickonebutton')\
             .find_elements_by_tag_name('button')
 
