@@ -426,12 +426,15 @@ class Scraper:
         qdata=[]
         self.driver.find_element_by_class_name('profile-questions-next-actions-button--answer')\
             .click()
+        count=0
 
         while True:
             try:
                 time.sleep(wait)
                 qdatum = self.answer_question_overlay(importance_answer)
                 qdata.append(qdatum)
+                count += 1
+                print(f'answered question no. {count}')
             except NoSuchElementException:
                 try:
                     self.driver.find_element_by_id('no-questions-blank-state')
