@@ -523,27 +523,3 @@ class Scraper:
             'importance': 1            \
         } 
 
-if __name__ == "__main__":
-    ren = Scraper('ren')
-    ren.login()
-    
-    
-    usernames = ren.collect_usernames(softlimit=20)
-    #[u['_id'] for u in ren.db.usernames.find({'_id':{'$exists':'true'}}, {'_id':'true'})]
-
-    for username in usernames:
-        udata = ren.scrape_user('live_images', username)
-        ren.db.users.insert_one(udata)
-
-
-
-
-
-
-
-
-
-
-
-
-
