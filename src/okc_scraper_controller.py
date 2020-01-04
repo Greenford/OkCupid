@@ -128,19 +128,19 @@ class Scraper:
         for question in prev_qd:
             text = question['q_text']
             if ret_dict.get(text) == None:
-                ret_dict[text] == question
+                ret_dict[text] = question
 
         return list(ret_dict.values())
 
 
-    def get_scraper_question_data(self):
+    def get_scraper_question_data(self, wait=1):
     #TODO docstring
         self.driver.get('https://www.okcupid.com/profile')
-        time.sleep(2+np.random.exponential())
+        time.sleep(wait*3)
         sameq = lambda q1, q2: q1.find_element_by_xpath('button/h3').text ==\
             q2.find_element_by_xpath('button/h3').text
         self.driver.find_element_by_class_name('profile-selfview-questions-more').click()
-        time.sleep(2+np.random.exponential())
+        time.sleep(wait*3)
 
         questions = self.driver.find_elements_by_class_name('profile-question')
         i = 0
@@ -150,10 +150,13 @@ class Scraper:
         while not sameq(current, questions[-1]):
             for j in range(i,len(questions)):
 
-                #open question detail overlay
+                qdatum = Scraper.get_data_from_answer_stub(question[j])
+                datalist.append(qdatum)
+
+                '''#open question detail overlay
                 questions[j].click()
                 #needs a moment to load
-                time.sleep(0.3+0.2*np.random.exponential())
+                time.sleep(0.7)
 
                 #scrape question overlay. 
                 overlay = self.driver.find_element_by_class_name('questionspage')
@@ -190,11 +193,12 @@ class Scraper:
                 })
 
                 #exit overlay
-                self.driver.find_element_by_class_name('reactmodal-header-close').click()
+                self.driver.find_element_by_class_name('reactmodal-header-close').click()'''
 
             #adjust loop conditions
             current = questions[j]
             current.location_once_scrolled_into_view
+            time.sleep(wait)
             questions = self.driver.find_elements_by_class_name('profile-question')
             for i in range(len(questions)):
                 if sameq(current, questions[i]):
@@ -458,23 +462,27 @@ class Scraper:
             .find_elements_by_tag_name('button')
         choicestext = [b.text for b in choicebuttons]
         answer = int(np.random.uniform() * len(choicestext))
-        choicebuttons[answer].click()
+        choicebuttons[answer]\
+            .click()
         time.sleep(wait)
 
         choicebuttons = self.driver\
             .find_element_by_class_name('convoanswers--theirs')\
             .find_elements_by_tag_name('button')
-        choicebuttons[answer].click()
+        choicebuttons[answer]\
+            .click()
         time.sleep(wait)
+        acceptable = [False]*len(choicestext)
+        acceptable[answer] = True
 
         self.driver.find_element_by_class_name('convoquestion-continue')\
             .click()
-        return {                    \
-            'q_text': qtext,        \
-            'choices': choicestext, \
-            'our_answer': answer,   \
-            'acceptable': answer,   \
-            'importance': 1         \
+        return {                      \
+            'q_text': qtext,          \
+            'choices': choicestext,   \
+            'our_answer': answer,     \
+            'acceptable': acceptable, \
+            'importance': 1           \
         }
         #TODO verify the assumed importance answer is right
 
@@ -498,6 +506,22 @@ class Scraper:
     def save_usernames_to_mongo(self, usernames):
         self.db.usernames.insert_many(map(lambda u: {'_id':u}, usernames))
 
+
+    def get_data_from_answer_stub(stub):
+        text = stub.find_element_by_tag_name('h3').text
+        answer_divs = stub.find_elements_by_class_name('profile-question-self-answers-answer')
+        choices = [a.text for a in answer_divs]
+        our_answer = [a.get_attribute('class').endswith('--isYourAnswer')\
+                for a in answer_divs].index(True)
+        acceptable = [not a.get_attribute('class').endswith('--isUnacceptable') for a in answer_divs]
+        
+        return {                       \
+            'q_text':text,             \
+            'choices': choices,        \
+            'our_answer': our_answer,  \
+            'acceptable': acceptable,  \
+            'importance': 1            \
+        } 
 
 if __name__ == "__main__":
     ren = Scraper('ren')
