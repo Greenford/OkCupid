@@ -150,7 +150,7 @@ class Scraper:
         while not sameq(current, questions[-1]):
             for j in range(i,len(questions)):
 
-                qdatum = Scraper.get_data_from_answer_stub(question[j])
+                qdatum = Scraper.get_data_from_answer_stub(questions[j])
                 datalist.append(qdatum)
 
                 '''#open question detail overlay
