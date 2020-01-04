@@ -434,19 +434,17 @@ class Scraper:
                 qdatum = self.answer_question_overlay(importance_answer)
                 qdata.append(qdatum)
                 count += 1
-                print(f'answered question no. {count}')
             except NoSuchElementException:
                 try:
                     self.driver.find_element_by_id('no-questions-blank-state')
-                    exit_stat = 0
+                    exit_stat = 'reached end of questions.'
                     break
                 except NoSuchElementException:
                     wait += 0.1
                     time.sleep(wait)
                     continue
             except Exception as e:
-                print(e)
-                exit_stat = 1
+                exit_stat = f'Error: {str(e)}'
                 break
         return (qdata, exit_stat)
 
